@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engelsk Ordforråd - Skolesystemet</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <style>
         * {
             margin: 0;
@@ -730,22 +733,27 @@
             return m + ':' + String(s).padStart(2, '0');
         }
 
-        // ── LEADERBOARD (stored in localStorage) ──
+        // ── FIREBASE LEADERBOARD ──
+        // ===========================================
+        // INDSÆT DINE FIREBASE-OPLYSNINGER HER
+        // (se vejledning nedenfor i koden)
+        const FIREBASE_CONFIG = {
+            apiKey:            "AIzaSyAFS3BFYSW92xACz_PUQ0J_YW_sezwBRws",
+            authDomain:        "engelsk-quiz.firebaseapp.com",
+            databaseURL:       "https://engelsk-quiz-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId:         "engelsk-quiz",
+        };
+        // ===========================================
+
+        // Firebase initialisering
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const db = firebase.database();
+
         let activeLbTab = 'easy';
 
-        function getLeaderboard(level) {
-            try {
-                return JSON.parse(localStorage.getItem('lb_' + level) || '[]');
-            } catch { return []; }
-        }
-
-        function saveToLeaderboard(level, name, time, mistakes) {
-            const lb = getLeaderboard(level);
-            lb.push({ name, time, mistakes, date: new Date().toLocaleDateString('da-DK') });
-            // Sort by time (asc), then mistakes (asc)
-            lb.sort((a, b) => a.time !== b.time ? a.time - b.time : a.mistakes - b.mistakes);
-            // Keep top 10
-            localStorage.setItem('lb_' + level, JSON.stringify(lb.slice(0, 10)));
+        async function saveToLeaderboard(level, name, time, mistakes) {
+            const entry = { name, time, mistakes, date: new Date().toLocaleDateString('da-DK') };
+            await db.ref('leaderboard/' + level).push(entry);
         }
 
         function openLeaderboard() {
@@ -764,49 +772,48 @@
         }
 
         function renderLeaderboard() {
-            // Update tab highlights
             ['easy','medium','hard'].forEach(l => {
                 document.getElementById('lb-tab-' + l).classList.toggle('active', l === activeLbTab);
             });
 
-            const lb = getLeaderboard(activeLbTab);
             const content = document.getElementById('lbContent');
+            content.innerHTML = '<p class="lb-empty">Henter scores... ⏳</p>';
 
-            if (lb.length === 0) {
-                content.innerHTML = '<p class="lb-empty">Ingen resultater endnu – vær den første! 🚀</p>';
-                return;
-            }
+            db.ref('leaderboard/' + activeLbTab)
+                .orderByChild('time')
+                .limitToFirst(10)
+                .once('value', snap => {
+                    const entries = [];
+                    snap.forEach(child => entries.push({ key: child.key, ...child.val() }));
+                    entries.sort((a, b) => a.time !== b.time ? a.time - b.time : a.mistakes - b.mistakes);
 
-            const medals = ['🥇','🥈','🥉'];
-            let rows = lb.map((entry, i) => `
-                <tr>
-                    <td>${medals[i] || (i + 1) + '.'}</td>
-                    <td>${entry.name}</td>
-                    <td>⏱ ${formatTime(entry.time)}</td>
-                    <td>❌ ${entry.mistakes}</td>
-                    <td style="color:#9ca3af;font-size:0.85em">${entry.date}</td>
-                </tr>
-            `).join('');
+                    if (entries.length === 0) {
+                        content.innerHTML = '<p class="lb-empty">Ingen resultater endnu – vær den første! 🚀</p>';
+                        return;
+                    }
 
-            content.innerHTML = `
-                <table class="lb-table">
-                    <thead>
+                    const medals = ['🥇','🥈','🥉'];
+                    const rows = entries.map((e, i) => `
                         <tr>
-                            <th>#</th>
-                            <th>Navn</th>
-                            <th>Tid</th>
-                            <th>Fejl</th>
-                            <th>Dato</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>`;
+                            <td>${medals[i] || (i+1) + '.'}</td>
+                            <td>${e.name}</td>
+                            <td>⏱ ${formatTime(e.time)}</td>
+                            <td>❌ ${e.mistakes}</td>
+                            <td style="color:#9ca3af;font-size:0.85em">${e.date}</td>
+                        </tr>`).join('');
+
+                    content.innerHTML = `
+                        <table class="lb-table">
+                            <thead><tr><th>#</th><th>Navn</th><th>Tid</th><th>Fejl</th><th>Dato</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>`;
+                });
         }
 
         function clearLeaderboard() {
             if (confirm('Er du sikker på du vil rydde leaderboardet for ' + activeLbTab + '?')) {
-                localStorage.removeItem('lb_' + activeLbTab);
-                renderLeaderboard();
+                db.ref('leaderboard/' + activeLbTab).remove()
+                    .then(() => renderLeaderboard());
             }
         }
 
@@ -841,73 +848,45 @@
         });
 
         // ── MUSIC ──
-        let audioCtx = null;
-        let musicPlaying = false;
-        let musicNodes = [];
-        let musicMuted = false;
+        // ===========================================
+        // SKIFT MUSIKFIL HER - sæt filnavnet på din egen musikfil
+        // Filen skal ligge i samme mappe som index.html på GitHub
+        const MUSIC_FILE = 'musik.mp3';
+        // ===========================================
 
-        function getAudioCtx() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            return audioCtx;
-        }
+        const bgMusic = new Audio(MUSIC_FILE);
+        bgMusic.loop = true;
+        bgMusic.volume = 0.4;
+        let musicMuted = false;
 
         function startMusic() {
             if (musicMuted) return;
-            stopMusic();
-            const ctx = getAudioCtx();
-            const notes = [261.63, 329.63, 392.00, 329.63, 293.66, 349.23, 392.00, 349.23];
-            const noteDuration = 0.35;
-            let startTime = ctx.currentTime + 0.05;
-
-            function scheduleLoop() {
-                notes.forEach((freq, i) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, startTime + i * noteDuration);
-                    gain.gain.setValueAtTime(0, startTime + i * noteDuration);
-                    gain.gain.linearRampToValueAtTime(0.12, startTime + i * noteDuration + 0.02);
-                    gain.gain.linearRampToValueAtTime(0.10, startTime + i * noteDuration + noteDuration - 0.05);
-                    gain.gain.linearRampToValueAtTime(0, startTime + i * noteDuration + noteDuration);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(startTime + i * noteDuration);
-                    osc.stop(startTime + i * noteDuration + noteDuration);
-                    musicNodes.push(osc);
-                });
-                startTime += notes.length * noteDuration;
-                if (musicPlaying) loopTimer = setTimeout(scheduleLoop, (notes.length * noteDuration - 0.5) * 1000);
-            }
-
-            musicPlaying = true;
-            scheduleLoop();
+            bgMusic.currentTime = 0;
+            bgMusic.play().catch(() => {}); // catch autoplay block
         }
 
-        let loopTimer = null;
         function stopMusic() {
-            musicPlaying = false;
-            clearTimeout(loopTimer);
-            musicNodes.forEach(n => { try { n.stop(); } catch(e){} });
-            musicNodes = [];
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
         }
 
         function toggleMusic() {
             musicMuted = !musicMuted;
             const btn = document.getElementById('musicBtn');
             if (musicMuted) {
-                stopMusic();
+                bgMusic.pause();
                 btn.textContent = '🔇';
                 btn.classList.add('muted');
             } else {
                 btn.textContent = '🎵';
                 btn.classList.remove('muted');
-                if (currentLevel) startMusic();
+                if (currentLevel) bgMusic.play().catch(() => {});
             }
         }
 
         // ── SOUND EFFECTS ──
         function playCorrectSound() {
-            const ctx = getAudioCtx();
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
             [523.25, 659.25, 783.99].forEach((freq, i) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -923,7 +902,7 @@
         }
 
         function playWrongSound() {
-            const ctx = getAudioCtx();
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sawtooth';
@@ -1002,9 +981,18 @@
             wordColumn.innerHTML = '';
             definitionColumn.innerHTML = '';
 
+            // Shuffle both columns independently so words never align with their definitions
+            const shuffledWords       = [...currentWords].sort(() => Math.random() - 0.5);
             const shuffledDefinitions = [...currentWords].sort(() => Math.random() - 0.5);
 
-            currentWords.forEach(item => {
+            // Keep reshuffling definitions until no pair accidentally lines up
+            let tries = 0;
+            while (tries < 20 && shuffledWords.some((w, i) => w.word === shuffledDefinitions[i].word)) {
+                shuffledDefinitions.sort(() => Math.random() - 0.5);
+                tries++;
+            }
+
+            shuffledWords.forEach(item => {
                 const wordCard = document.createElement('div');
                 wordCard.className = 'word-card';
                 wordCard.textContent = item.word;
