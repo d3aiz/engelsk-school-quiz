@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engelsk Ordforråd - Skolesystemet</title>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <style>
         * {
             margin: 0;
@@ -646,6 +643,9 @@
         </div>
     </div>
 
+    <!-- Firebase SDK - indlæses FØR spil-scriptet -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script>
         // ============================================
         // ORDLISTER - REDIGER HER!
@@ -736,18 +736,24 @@
         // ── FIREBASE LEADERBOARD ──
         // ===========================================
         // INDSÆT DINE FIREBASE-OPLYSNINGER HER
-        // (se vejledning nedenfor i koden)
         const FIREBASE_CONFIG = {
-            apiKey:            "AIzaSyAFS3BFYSW92xACz_PUQ0J_YW_sezwBRws",
-            authDomain:        "engelsk-quiz.firebaseapp.com",
-            databaseURL:       "https://engelsk-quiz-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId:         "engelsk-quiz",
+            apiKey:            "DIN_API_KEY",
+            authDomain:        "DIT_PROJEKT.firebaseapp.com",
+            databaseURL:       "https://DIT_PROJEKT-default-rtdb.firebaseio.com",
+            projectId:         "DIT_PROJEKT",
         };
         // ===========================================
 
-        // Firebase initialisering
-        firebase.initializeApp(FIREBASE_CONFIG);
-        const db = firebase.database();
+        let db = null;
+
+        window.addEventListener('load', () => {
+            try {
+                firebase.initializeApp(FIREBASE_CONFIG);
+                db = firebase.database();
+            } catch(e) {
+                console.error('Firebase kunne ikke initialiseres:', e);
+            }
+        });
 
         let activeLbTab = 'easy';
 
@@ -854,18 +860,24 @@
         const MUSIC_FILE = 'musik.mp3';
         // ===========================================
 
-        const bgMusic = new Audio(MUSIC_FILE);
-        bgMusic.loop = true;
-        bgMusic.volume = 0.4;
+        let bgMusic = null;
         let musicMuted = false;
+
+        function initMusic() {
+            bgMusic = new Audio(MUSIC_FILE);
+            bgMusic.loop = true;
+            bgMusic.volume = 0.4;
+        }
 
         function startMusic() {
             if (musicMuted) return;
+            if (!bgMusic) initMusic();
             bgMusic.currentTime = 0;
-            bgMusic.play().catch(() => {}); // catch autoplay block
+            bgMusic.play().catch(() => {});
         }
 
         function stopMusic() {
+            if (!bgMusic) return;
             bgMusic.pause();
             bgMusic.currentTime = 0;
         }
@@ -874,13 +886,13 @@
             musicMuted = !musicMuted;
             const btn = document.getElementById('musicBtn');
             if (musicMuted) {
-                bgMusic.pause();
+                if (bgMusic) bgMusic.pause();
                 btn.textContent = '🔇';
                 btn.classList.add('muted');
             } else {
                 btn.textContent = '🎵';
                 btn.classList.remove('muted');
-                if (currentLevel) bgMusic.play().catch(() => {});
+                if (currentLevel) startMusic();
             }
         }
 
@@ -1061,8 +1073,12 @@
                 if (!musicMuted) playWrongSound();
 
                 setTimeout(() => {
-                    selectedWord.classList.remove('wrong', 'selected');
-                    selectedDefinition.classList.remove('wrong', 'selected');
+                    [selectedWord, selectedDefinition].forEach(card => {
+                        card.classList.remove('wrong', 'selected');
+                        card.style.animation = 'none';
+                        card.offsetHeight; // tving browser reflow
+                        card.style.animation = '';
+                    });
                     feedback.textContent = '';
                 }, 1000);
             }
