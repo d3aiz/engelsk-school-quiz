@@ -664,7 +664,7 @@
         // GOOGLE SHEETS OPSÆTNING - REDIGER HER!
         // ============================================
         // Indsæt dit Google Sheets ID her (se vejledning nedenfor)
-        const SHEETS_ID = '1MEuegpJf5yzplT3FXosWNtQ9rOspOdO-rkvQIc_mu1g';
+        const SHEETS_ID = 'DIT_SHEETS_ID';
 
         // Fanebladenes navne i dit Google Sheets ark
         // Disse SKAL matche præcis hvad fanebladene hedder i dit ark
@@ -725,7 +725,7 @@
                 const text = await res.text();
                 // Google returnerer JSONP — strip wrapperen
                 const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
-                const rows = json.table.rows;
+                const rows = json.table.rows.slice(1); // spring overskriftsrækken over
                 return rows
                     .map(r => ({
                         word:       r.c[0]?.v?.toString().trim(),
