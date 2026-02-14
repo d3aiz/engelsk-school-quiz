@@ -661,8 +661,21 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script>
         // ============================================
-        // ORDLISTER - REDIGER HER!
+        // GOOGLE SHEETS OPSÆTNING - REDIGER HER!
         // ============================================
+        // Indsæt dit Google Sheets ID her (se vejledning nedenfor)
+        const SHEETS_ID = '1MEuegpJf5yzplT3FXosWNtQ9rOspOdO-rkvQIc_mu1g';
+
+        // Fanebladenes navne i dit Google Sheets ark
+        // Disse SKAL matche præcis hvad fanebladene hedder i dit ark
+        const SHEET_NAMES = {
+            easy:   'Easy',
+            medium: 'Medium',
+            hard:   'Hard'
+        };
+        // ============================================
+
+        // Reserveordliste bruges hvis Google Sheets ikke er sat op endnu
         const vocabularyLists = {
             easy: [
                 { word: "teacher", definition: "lærer" },
@@ -701,6 +714,29 @@
                 { word: "vocational training", definition: "erhvervsuddannelse" }
             ]
         };
+
+        // Hent ord fra Google Sheets
+        async function fetchWordsFromSheets(level) {
+            if (SHEETS_ID === 'DIT_SHEETS_ID') return null; // ikke sat op endnu
+            const sheetName = SHEET_NAMES[level];
+            const url = `https://docs.google.com/spreadsheets/d/${SHEETS_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+            try {
+                const res  = await fetch(url);
+                const text = await res.text();
+                // Google returnerer JSONP — strip wrapperen
+                const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+                const rows = json.table.rows;
+                return rows
+                    .map(r => ({
+                        word:       r.c[0]?.v?.toString().trim(),
+                        definition: r.c[1]?.v?.toString().trim()
+                    }))
+                    .filter(r => r.word && r.definition);
+            } catch (e) {
+                console.warn('Kunne ikke hente ord fra Google Sheets:', e);
+                return null;
+            }
+        }
 
         // ============================================
         // SPIL LOGIK
@@ -1000,14 +1036,15 @@
             document.getElementById('currentLevel').textContent =
                 level === 'easy' ? 'Easy' : level === 'medium' ? 'Medium' : 'Hard';
 
-            currentWords = [...vocabularyLists[level]];
-            shuffleArray(currentWords);
-
-            displayWords();
-            updateScore();
-            startTimer();
-
-            if (!musicMuted) startMusic();
+            // Hent ord fra Google Sheets, fald tilbage på reserveliste
+            fetchWordsFromSheets(level).then(words => {
+                currentWords = (words && words.length > 0) ? words : [...vocabularyLists[level]];
+                shuffleArray(currentWords);
+                displayWords();
+                updateScore();
+                startTimer();
+                if (!musicMuted) startMusic();
+            });
         }
 
         function displayWords() {
