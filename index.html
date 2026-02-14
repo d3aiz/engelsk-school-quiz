@@ -557,6 +557,20 @@
 </head>
 <body>
     <!-- Name input popup -->
+    <!-- Velkomst popup -->
+    <div class="name-popup-overlay show" id="welcomePopup">
+        <div class="name-popup">
+            <span style="font-size:2.5em">🎓</span>
+            <h2>Velkommen!</h2>
+            <p style="text-align:left; line-height:1.7em; margin-top: 10px;">
+                Spillet går ud på at du skal matche de korrekte engelske og danske ord med hinanden.<br><br>
+                De <strong>engelske ord</strong> står på <strong>venstre side</strong> og de <strong>danske ord</strong> står på <strong>højre side</strong>.<br><br>
+                Kan du klare dem alle? Og hvor hurtigt kan du gøre det? 🚀
+            </p>
+            <button class="name-popup-btn" style="margin-top:20px" onclick="closeWelcomePopup()">Lad os spille! 🎮</button>
+        </div>
+    </div>
+
     <div class="name-popup-overlay" id="namePopup">
         <div class="name-popup">
             <h2>🎉 Godt klaret!</h2>
@@ -578,7 +592,6 @@
             </div>
             <div id="lbContent"></div>
             <button class="lb-close-btn" onclick="closeLeaderboard()">Luk</button>
-            <button class="lb-clear-btn" onclick="clearLeaderboard()">Ryd leaderboard</button>
         </div>
     </div>
 
@@ -746,18 +759,17 @@
 
         let db = null;
 
-        window.addEventListener('load', () => {
-            try {
-                firebase.initializeApp(FIREBASE_CONFIG);
-                db = firebase.database();
-            } catch(e) {
-                console.error('Firebase kunne ikke initialiseres:', e);
-            }
-        });
+        try {
+            firebase.initializeApp(FIREBASE_CONFIG);
+            db = firebase.database();
+        } catch(e) {
+            console.error('Firebase kunne ikke initialiseres:', e);
+        }
 
         let activeLbTab = 'easy';
 
         async function saveToLeaderboard(level, name, time, mistakes) {
+            if (!db) { alert('Leaderboard er ikke tilgængeligt – tjek Firebase-opsætningen.'); return; }
             const entry = { name, time, mistakes, date: new Date().toLocaleDateString('da-DK') };
             await db.ref('leaderboard/' + level).push(entry);
         }
@@ -783,6 +795,12 @@
             });
 
             const content = document.getElementById('lbContent');
+
+            if (!db) {
+                content.innerHTML = '<p class="lb-empty">⚠️ Firebase er ikke opsat endnu.</p>';
+                return;
+            }
+
             content.innerHTML = '<p class="lb-empty">Henter scores... ⏳</p>';
 
             db.ref('leaderboard/' + activeLbTab)
@@ -821,6 +839,11 @@
                 db.ref('leaderboard/' + activeLbTab).remove()
                     .then(() => renderLeaderboard());
             }
+        }
+
+        // ── VELKOMST POPUP ──
+        function closeWelcomePopup() {
+            document.getElementById('welcomePopup').classList.remove('show');
         }
 
         // ── NAME INPUT POPUP ──
@@ -1066,18 +1089,23 @@
                     setTimeout(showCompletion, 1800);
                 }
             } else {
-                selectedWord.classList.add('wrong');
-                selectedDefinition.classList.add('wrong');
+                const wrongWord = selectedWord;
+                const wrongDef  = selectedDefinition;
+                selectedWord = null;
+                selectedDefinition = null;
+
+                wrongWord.classList.add('wrong');
+                wrongDef.classList.add('wrong');
                 feedback.textContent = '✗ Forkert – prøv igen!';
                 feedback.className = 'feedback wrong';
                 if (!musicMuted) playWrongSound();
 
                 setTimeout(() => {
-                    [selectedWord, selectedDefinition].forEach(card => {
-                        card.classList.remove('wrong', 'selected');
+                    [wrongWord, wrongDef].forEach(card => {
                         card.style.animation = 'none';
                         card.offsetHeight; // tving browser reflow
                         card.style.animation = '';
+                        card.classList.remove('wrong', 'selected');
                     });
                     feedback.textContent = '';
                 }, 1000);
