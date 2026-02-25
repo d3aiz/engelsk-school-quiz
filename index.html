@@ -910,32 +910,8 @@
 
         async function saveToLeaderboard(level, name, time, mistakes) {
             if (!db) { alert('Leaderboard er ikke tilgængeligt – tjek Firebase-opsætningen.'); return; }
-            
             const entry = { name, time, mistakes, date: new Date().toLocaleDateString('da-DK') };
-            
-            // Tjek om navnet allerede har en score
-            const snapshot = await db.ref('leaderboard/' + level).orderByChild('name').equalTo(name).once('value');
-            
-            if (snapshot.exists()) {
-                // Navn findes allerede - opdater kun hvis den nye score er bedre
-                let existingKey = null;
-                let existingBest = null;
-                snapshot.forEach(child => {
-                    existingKey = child.key;
-                    existingBest = child.val();
-                });
-                
-                // Sammenlign: lavere tid er bedre, ved samme tid er færre fejl bedre
-                const isNewBetter = time < existingBest.time || 
-                                   (time === existingBest.time && mistakes < existingBest.mistakes);
-                
-                if (isNewBetter) {
-                    await db.ref('leaderboard/' + level + '/' + existingKey).update(entry);
-                }
-            } else {
-                // Nyt navn - tilføj score
-                await db.ref('leaderboard/' + level).push(entry);
-            }
+            await db.ref('leaderboard/' + level).push(entry);
         }
 
         function openLeaderboard() {
