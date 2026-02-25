@@ -909,9 +909,20 @@
         let activeLbTab = 'easy';
 
         async function saveToLeaderboard(level, name, time, mistakes) {
-            if (!db) { alert('Leaderboard er ikke tilgængeligt – tjek Firebase-opsætningen.'); return; }
+            console.log('saveToLeaderboard kaldt:', {level, name, time, mistakes});
+            if (!db) { 
+                console.error('Firebase db er ikke tilgængelig');
+                alert('Leaderboard er ikke tilgængeligt – tjek Firebase-opsætningen.'); 
+                return; 
+            }
             const entry = { name, time, mistakes, date: new Date().toLocaleDateString('da-DK') };
-            await db.ref('leaderboard/' + level).push(entry);
+            console.log('Gemmer entry:', entry);
+            try {
+                const result = await db.ref('leaderboard/' + level).push(entry);
+                console.log('Entry gemt med key:', result.key);
+            } catch(e) {
+                console.error('Fejl ved gemning:', e);
+            }
         }
 
         function openLeaderboard() {
@@ -930,6 +941,7 @@
         }
 
         function renderLeaderboard() {
+            console.log('renderLeaderboard kaldt for niveau:', activeLbTab);
             ['easy','medium','hard'].forEach(l => {
                 document.getElementById('lb-tab-' + l).classList.toggle('active', l === activeLbTab);
             });
@@ -945,8 +957,13 @@
 
             // Hent ALLE scores og sortér dem i JavaScript for at sikre korrekt rækkefølge
             db.ref('leaderboard/' + activeLbTab).once('value', snap => {
+                console.log('Firebase snapshot modtaget, exists:', snap.exists());
                 const entries = [];
-                snap.forEach(child => entries.push({ key: child.key, ...child.val() }));
+                snap.forEach(child => {
+                    console.log('Firebase entry:', child.key, child.val());
+                    entries.push({ key: child.key, ...child.val() });
+                });
+                console.log('Totalt antal entries:', entries.length);
                 
                 // Sortér: først efter tid (lavest først), derefter efter fejl (lavest først)
                 entries.sort((a, b) => {
@@ -956,6 +973,7 @@
                 
                 // Tag top 10
                 const top10 = entries.slice(0, 10);
+                console.log('Top 10 efter sortering:', top10);
 
                 if (top10.length === 0) {
                     content.innerHTML = '<p class="lb-empty">Ingen resultater endnu – vær den første! 🚀</p>';
